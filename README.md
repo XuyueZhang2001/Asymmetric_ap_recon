@@ -19,11 +19,28 @@ The image for illustration is included in this repository as test3_1600_1200.jpg
 The result is saved to SAVE_PATH as defined in each py file. Please refer to the latest version for reconstruction algorithims. 
 
 ## Per-angle intermediate outputs (single_results/)
-All per-angle artifacts are written under <SAVE_PATH parent>/single_results/, inside a run directory named {REG_K}_{NOISE}_{BIN_FACTOR} (e.g. 0.05_True_10). The six subfolders trace the forward model and pre-fusion processing chain in order.
-ROI/ holds the raw rotated crops, one per angle. The L×W window rotates with φ, but the image content keeps its original orientation. No blur, no noise. Written as image_{i}_phi{φ}.jpg by crop_and_rotate.
-IMG_SINGLE/ holds the simulated single-aperture observation: the ROI convolved with PSF(φ=0), corrupted with Poisson noise, binned along the blur direction, then rotated back to φ and blended onto the C_SIZE² canvas. This is what a real detector behind aperture i would record. Written as image_{i}_phi{φ}.jpg after rotate_and_blend.
-SINGLE_FFTS/ stores fftshift(FFT2(IMG_SINGLE[i])) as complex64 arrays of shape (C_SIZE, C_SIZE, 3), named {i}_phi{φ}.npy. These are used only to derive the shared DC_MEAN calibration constant — they are not the fusion inputs.
-IMG_CROP_FILL/ holds the result of missing-pixel fill: pixels lying inside some aperture's footprint but outside this one's are replaced by the mean over all contributing apertures, as recorded in CONTR_MAP. Written as image_{i}_phi{φ}.jpg by fill_missing_pixels_gpu.
-IMG_FINAL/ holds the edge-softened images. Each filled image is convolved with its own PSF(φᵢ) and smoothstep-blended back against the unconvolved version, so that filled (sharp) and observed (blurred) regions transition smoothly across the footprint boundary instead of meeting at a visible ring. Written as image_{i}_phi{φ}.jpg.
-G_IMG_FFTS/ stores fftshift(FFT2(IMG_FINAL[i])), again complex64 (C_SIZE, C_SIZE, 3) named {i}_phi{φ}.npy. These are the actual fusion inputs Gᵢ consumed by combine_unequal_images_gpu.
-The chain runs ROI → IMG_SINGLE → (SINGLE_FFTS) → IMG_CROP_FILL → IMG_FINAL → G_IMG_FFTS → per-group reconstruction. Comparing IMG_SINGLE against IMG_CROP_FILL isolates the fill step; comparing IMG_CROP_FILL against IMG_FINAL isolates the boundary-softening step. The two FFT folders exist separately because SINGLE_FFTS reflects the uncorrected observation, whose DC values are averaged to form the calibration target, while G_IMG_FFTS reflects the fully pre-processed image that enters the bow-tie fusion.
+All per-angle artifacts are written under <SAVE_PATH parent>/single_results/, inside a run directory named {REG_K}_{NOISE}_{BIN_FACTOR}_{SIGMA} (e.g. 0.05_True_10_25). 
+
+The reconstructed image is saved in this directory, named as {N_APERTURE}_combined_result.jpg, or {N_APERTURE}_combined_result_no_h.jpg (before h filter).
+
+{SAVE_PATH}
+|
+|
+|________ {N_APERTURE}_combined_result.jpg: Final reconstruction result
+|________ {N_APERTURE}_combined_result_no_h.jpg: Reconstruction result before deconvolution filter
+|________ single_results: results for each single aperture combination results (for check and debug)
+                |
+                |______ results for a single combination (named as group number): xx_fft.npy, xx_h_filter.npy, xx_masks.npz, xx_no_h.jpg, xx_sum_m_mtf.jpg, xx.jpg
+                |
+                |______ G_IMG_FFTS: ffts for each single aperture images (after filling)
+                |
+                |______ IMG_CROP_FILL: filled images for each single aperture
+                |
+                |______ IMG_FINAL: filled image after soft weighting and edge blurring
+                |
+                |______ IMG_SINGLE: each single aperture images
+                |
+                |______ SINGLE_FFTS: ffts for each raw single apertures (before filling)
+                |
+                |______ SOFT_WT: soft weight map for each filling missing pixels
+
